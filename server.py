@@ -471,18 +471,16 @@ def modify(varargs):
     price = filter_args.pop('price', 0)
     quantity = filter_args.pop('quantity', 0)
     trigger_price = filter_args.pop('trigger_price', 0)
+    if trigger_price:
+        filter_args['status'] = 'trigger pending'
+    else:
+        filter_args['status'] = 'open'
     n = filter_args.pop('n', 0)
     modifications = {}
-    if price:
-        modifications['price' ] = price
-        filter_args['status'] = 'open'
-    else:
-        filter_args['status'] = 'trigger pending'
     if quantity:
         modifications['quantity'] = quantity
+    modifications['price' ] = price
     modifications['trigger_price'] = trigger_price
-    # added by karthick 5th jun 2022
-
     for user in USERS:
         if user not in DISABLED_USERS:
             response = user.broker.modify_all_orders_by_conditions(modifications,

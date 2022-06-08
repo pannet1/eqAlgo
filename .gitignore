@@ -1,7 +1,10 @@
 #project specific
 Reports/
 tokens/
-users.xls
+*.xls
+*.xlsx
+*.json
+*.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
