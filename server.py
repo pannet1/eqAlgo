@@ -24,10 +24,12 @@ To exit the first order only, add ?mode=first like
 /be/symbol/stop?first=True
 """
 
+
 contracts = fetch_all_contracts(exchanges=['NSE', 'NFO'])
 USERS = load_all_users()
 for user in USERS:
     user.broker.contracts = contracts
+    user.broker.exchange = 'NFO'
 
 shortcuts = load_shortcuts()
 print(USERS)
@@ -221,86 +223,6 @@ def nrml_exit(symbol):
                 print(e)
         return jsonify(responses)
 
-@app.route('/ns/<symbol>/<trigger_price>', methods=['GET'])
-def nrml_stop(symbol, trigger_price):
-    """
-    Exit NRML order by symbol
-    """
-    responses = []
-    symbol = str(symbol).upper()
-    trigger_price = float(trigger_price)
-    percent = float(request.args.get('p', 1.0))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.stop_for_position_by_symbol,symbol,trigger_price,percent,"NRML") for user in USERS}
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                data = future.result()
-                if data:
-                    responses.append(data)
-            except Exception as e:
-                print(e)
-        return jsonify(responses)
-
-@app.route('/ms/<symbol>/<trigger_price>', methods=['GET'])
-def mis_stop(symbol, trigger_price):
-    """
-    Exit MIS order by symbol
-    """
-    responses = []
-    symbol = str(symbol).upper()
-    trigger_price = float(trigger_price)
-    percent = float(request.args.get('p', 1.0))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.stop_for_position_by_symbol,symbol,trigger_price,percent,"MIS") for user in USERS}
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                data = future.result()
-                if data:
-                    responses.append(data)
-            except Exception as e:
-                print(e)
-        return jsonify(responses)
-
-@app.route('/nt/<symbol>/<price>', methods=['GET'])
-def normal_target(symbol, price):
-    """
-    target NRML order by symbol
-    """
-    responses = []
-    symbol = str(symbol).upper()
-    price = float(price)
-    percent = float(request.args.get('p', 1.0))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.target_for_position_by_symbol,symbol,price,percent,"NRML") for user in USERS}
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                data = future.result()
-                if data:
-                    responses.append(data)
-            except Exception as e:
-                print(e)
-        return jsonify(responses)
-
-@app.route('/mt/<symbol>/<price>', methods=['GET'])
-def mis_target(symbol, price):
-    """
-    target MIS order by symbol
-    """
-    responses = []
-    symbol = str(symbol).upper()
-    price = float(price)
-    percent = float(request.args.get('p', 1.0))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.target_for_position_by_symbol,symbol,price,percent,"MIS") for user in USERS}
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                data = future.result()
-                if data:
-                    responses.append(data)
-            except Exception as e:
-                print(e)
-        return jsonify(responses)
-
 @app.route('/pending')
 def pending():
     lst = []
@@ -321,6 +243,7 @@ def pending():
 @app.route('/positions')
 def positions():
     lst = []
+    statuses = []
     all_mtm = 0
     users = [user for user in USERS]
     def check_and_close(user, timeout=1):
@@ -337,28 +260,56 @@ def positions():
                 if user.broker.pending_orders():
                     print('Triggering panic - closing all BO orders')
                     user.exit_all_bracket_orders()
-                    print('Triggering panic - closing all orders')
                     user.broker.cancel_all_orders_by_conditions()
                     #requests.get(f"http://127.0.0.1:8181/disable/{client_id}")
                 else:
                     print('No pending orders to exit')
-                ## close remaining positions
-                print('Triggering panic - closing all positions')
-                user.broker.close_all_positions()
+                user.exit_all_positions()
             return pos
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(users)) as executor:
         future_to_result = {executor.submit(check_and_close, user) for user in USERS}
         for future in concurrent.futures.as_completed(future_to_result):
             try:
                 data = future.result()
-                all_mtm += user.broker.mtm(data)
                 if data:
-                    lst.extend(data)
+                    statuses.extend(data)
+                    all_mtm += user.broker.mtm(data)
             except Exception as e:
                 print(e)
     print(f"Combined MTM: {int(all_mtm)}")
     return jsonify(lst)
 
+@app.route('/panic')
+def exit_all():
+    # Exit all positions for all users
+    users = [user for user in USERS]
+    responses = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(users)) as executor:
+        future_to_result = {executor.submit(user.exit_all_positions) for user in USERS}
+        for future in concurrent.futures.as_completed(future_to_result):
+            try:
+                data = future.result()
+                if data:
+                    responses.extend(data)
+            except Exception as e:
+                print(e)
+    return jsonify(responses)
+
+@app.route('/cancel_all')
+def cancel_all_orders():
+    # Cancel all pending orders for all users
+    users = [user for user in USERS]
+    responses = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(users)) as executor:
+        future_to_result = {executor.submit(user.broker.cancel_all_orders) for user in USERS}
+        for future in concurrent.futures.as_completed(future_to_result):
+            try:
+                data = future.result()
+                if data:
+                    responses.extend(data)
+            except Exception as e:
+                print(e)
+    return jsonify(responses)
 
 @app.route('/mtm')
 def mtm():
