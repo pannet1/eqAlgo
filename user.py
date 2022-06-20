@@ -133,6 +133,42 @@ class User(object):
         return status
 
     
+    def stop_and_reverse(self, symbol:str, opposite:str, product='MIS'):
+        """
+        exit positions by symbol and reverse
+        symbol
+            symbol to exit
+        opposite
+            percentage of orders to exit
+        """
+        positions = self.broker.positions()
+        positions = self.broker.filter(positions, symbol=symbol, product=product)
+        if len(positions) == 0:
+            print(f"No positions for the given {symbol}")
+            return
+        else:
+            positions = positions[0] # since there would only be one position matching this type
+        quantity = positions.get('quantity', 0)
+        if quantity == 0:
+            print(f"Nothing to exit for {symbol} since positions are zero")
+            return
+        side = 'BUY' if quantity <0 else 'SELL'
+        exchange=positions.get('exchange')
+        order_quantity = abs(int(quantity * percent))
+        if exchange == 'NFO':
+            order_quantity = int(order_quantity/50)*50
+        order_args = dict(
+                symbol=symbol,
+                quantity=order_quantity,
+                side = side,
+                order_type='MARKET',
+                exchange=exchange,
+                product=product,
+                validity='DAY'
+                )
+        status = self.broker.order_place(**order_args)
+        return status
+
     def exit_all_positions(self):
         """
         exit all positions
@@ -162,6 +198,10 @@ class User(object):
                         )
                 status = self.broker.order_place(**order_args)
                 statuses.append(status)
+                order_args['side']='BUY'
+                order_args['symbol']=opposite
+                status = self.broker.order_place(**order_args)
+                statuses.append(status)
         return statuses
     
     def stop_for_position_by_symbol(self, symbol:str, trigger_price:float, price:float, percent:float=1.0, product='NRML'):
@@ -188,6 +228,8 @@ class User(object):
             print(f"Nothing to exit for {symbol} since positions are zero")
             return
         side = 'BUY' if quantity <0 else 'SELL'
+        delta = 1 if side=='BUY' else -1
+        price = int(float(trigger_price) + (delta * 2/100 * float(trigger_price)))        
         order_quantity = abs(int(quantity * percent))
         
         exchange=positions.get('exchange')

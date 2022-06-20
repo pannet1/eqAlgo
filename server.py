@@ -24,7 +24,6 @@ To exit the first order only, add ?mode=first like
 /be/symbol/stop?first=True
 """
 
-
 contracts = fetch_all_contracts(exchanges=['NSE', 'NFO'])
 USERS = load_all_users()
 for user in USERS:
@@ -57,7 +56,35 @@ def transform(varargs):
 @app.route('/')
 def hello_world():
     print(request.args)
-    return "Go to http://127.0.0.1:8181/order to place your order"
+    Return = '''
+
+    http://127.0.0.1:8181/order <br>
+    <h4> cancel and panic </h4>
+    <a href='http://127.0.0.1:8181/cancel_all'>cancel all </a> </br>
+    http://127.0.0.1:8181/panic <br> 
+    <h4>NRML exit, stop and target </h4>
+    http://127.0.0.1:8181/ne/NIFTY2262315500CE <br> 
+    http://127.0.0.1:8181/ns/NIFTY2262315500CE/90?p=2  <br>
+    http://127.0.0.1:8181/nt/NIFTY2262315500CE/110?p=0.5 <br>
+    <h4>Modify trigger order</h4>
+    http://127.0.0.1:8181/modify/sym=NIFTY2260916500PE/qty=50/trigger_price=80/side=SELL <br>
+    http://127.0.0.1:8181/modify/sym=NIFTY2260916500PE/qty=50/trigger_price=120/side=BUY <br>
+    <h4>Modify open order</h4>
+    http://127.0.0.1:8181/modify/sym=NIFTY2260916500PE/qty=50/price=140/side=SELL <br>
+    http://127.0.0.1:8181/modify/sym=NIFTY2260916500PE/qty=50/price=90/side=BUY <br>
+    <h4>Modify stop order and square off position </h4>
+    http://127.0.0.1:8181/modify/sym=NIFTY2260916500PE/trigger_price=1/side=SELL/ot=MARKET <br>
+    <h4>cancel target orders </h4> 
+    http://127.0.0.1:8181/cancel/sym=NIFTY2260916500PE/status=open/side=Buy <br>
+    <h4>cancel stop orders </h4> 
+    http://127.0.0.1:8181/cancel/sym=NIFTY2260916500PE/status=trigger pending/side=SELL <br>
+    http://127.0.0.1:8181/cancel_all <br>
+    <h4>stop and reverse</h4>
+    http://127.0.0.1:8181/copy/NIFTY2262315500CE/NIFTY2262315500PE <br>
+    <h4>move stop to BEP</h4>
+    http://127.0.0.1:8181/ns/NIFTY2262315500CE/bep <br>
+    '''
+    return Return
 
 @app.route('/order/<path:varargs>', methods=['GET'])
 def order(varargs):
@@ -214,6 +241,105 @@ def nrml_exit(symbol):
     percent = float(request.args.get('p', 1.0))
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
         futures = {executor.submit(user.exit_position_by_symbol,symbol,percent,"NRML") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/ns/<symbol>/<trigger_price>', methods=['GET'])
+def nrml_stop(symbol, trigger_price):
+    """
+    Exit NRML order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    trigger_price = float(trigger_price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.stop_for_position_by_symbol,symbol,trigger_price,percent,"NRML") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/ms/<symbol>/<trigger_price>', methods=['GET'])
+def mis_stop(symbol, trigger_price):
+    """
+    Exit MIS order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    trigger_price = float(trigger_price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.stop_for_position_by_symbol,symbol,trigger_price,percent,"MIS") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/nt/<symbol>/<price>', methods=['GET'])
+def normal_target(symbol, price):
+    """
+    target NRML order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    price = float(price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.target_for_position_by_symbol,symbol,price,percent,"NRML") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/mt/<symbol>/<price>', methods=['GET'])
+def mis_target(symbol, price):
+    """
+    target MIS order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    price = float(price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.target_for_position_by_symbol,symbol,price,percent,"MIS") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)    
+
+@app.route('/copy/<symbol>/<opposite>', methods=['GET'])
+def sr(symbol, opposite):
+    """
+    Exit NRML order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    opposite = str(opposite).upper()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.stop_and_reverse,symbol,opposite,"NRML") for user in USERS}
         for future in concurrent.futures.as_completed(futures):
             try:
                 data = future.result()
@@ -417,18 +543,28 @@ def modify(varargs):
     """
     responses = []
     filter_args = transform(varargs)
+    side = filter_args.get('side','')
+    side = side.upper()
+    if (side !="BUY") and (side!="SELL"):
+        return f'side argument is missing or its incorrect {side}'
     ot = filter_args.pop('ot', '')
     exchange = filter_args.get('exchange', 'NFO')
     # Check for modifications
     price = filter_args.pop('price', 0)
     quantity = filter_args.pop('quantity', 0)
-    trigger_price = filter_args.pop('trigger_price', 0)
-    if trigger_price:
-        filter_args['status'] = 'trigger pending'
-    else:
+    trigger_price = float(filter_args.pop('trigger_price', 0))
+    if price:
         filter_args['status'] = 'open'
+    elif trigger_price:
+        filter_args['status'] = 'trigger pending'
+        delta = int(trigger_price * 0.02)
+        delta = 2 if delta < 2 else delta
+        price= trigger_price-delta if side=='BUY' else trigger_price+delta
+    else:
+        return f'trigger_price {trigger_price} or price {price} is mandatory'
     n = filter_args.pop('n', 0)
     modifications = {}
+    modifications['side'] = side
     if len(ot) > 0:
         modifications['ot'] = ot
     if quantity:
@@ -450,7 +586,16 @@ def cancel(varargs):
     responses = []
     filter_args = transform(varargs)
     n = filter_args.pop('n', 0)
-    exchange = filter_args.get('exchange', 'NFO')
+    exchange = filter_args.get('exchange','')
+    if exchange =='':
+        filter_args['exchange']='NFO'
+    order_status = filter_args.get('order_status', '')
+    if (order_status != 'trigger pending') and  (order_status!='open'):
+        return f'status is mandatory or its incorrect {status}'
+    side = filter_args.get('side', '')
+    side = side.upper()
+    if (side != 'BUY') and (side!= 'SELL'):
+        return f'side is mandatory or its incorrect {side}'
     # Check for modifications
     for user in USERS:
         if user not in DISABLED_USERS:
