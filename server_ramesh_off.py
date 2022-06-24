@@ -19,11 +19,10 @@ Routes
 4. /bt/symbol/target - adjust target for bracket order
 5. /be/symbol - exit bracket order
 6. /me/symbol - exit MIS order by symbol
-7. /ne/symbol - exit MIS order by symbol
+7. /ne/symbol - exit NRML order by symbol
 To exit the first order only, add ?mode=first like
 /be/symbol/stop?first=True
 """
-
 
 contracts = fetch_all_contracts(exchanges=['NSE', 'NFO'])
 USERS = load_all_users()
@@ -207,7 +206,7 @@ def mis_exit(symbol):
 @app.route('/ne/<symbol>', methods=['GET'])
 def nrml_exit(symbol):
     """
-    Exit MIS order by symbol
+    Exit NRML order by symbol
     """
     responses = []
     symbol = str(symbol).upper()
@@ -222,6 +221,86 @@ def nrml_exit(symbol):
             except Exception as e:
                 print(e)
         return jsonify(responses)
+
+@app.route('/ns/<symbol>/<trigger_price>', methods=['GET'])
+def nrml_stop(symbol, trigger_price):
+    """
+    Exit NRML order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    trigger_price = float(trigger_price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.stop_for_position_by_symbol,symbol,trigger_price,percent,"NRML") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/ms/<symbol>/<trigger_price>', methods=['GET'])
+def mis_stop(symbol, trigger_price):
+    """
+    Exit MIS order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    trigger_price = float(trigger_price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.stop_for_position_by_symbol,symbol,trigger_price,percent,"MIS") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/nt/<symbol>/<price>', methods=['GET'])
+def normal_target(symbol, price):
+    """
+    target NRML order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    price = float(price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.target_for_position_by_symbol,symbol,price,percent,"NRML") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/mt/<symbol>/<price>', methods=['GET'])
+def mis_target(symbol, price):
+    """
+    target MIS order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    price = float(price)
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.target_for_position_by_symbol,symbol,price,percent,"MIS") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)    
 
 @app.route('/pending')
 def pending():
@@ -258,14 +337,14 @@ def positions():
             print(f"{client_id}|Current PnL:{int(mtm)}|Max PnL:{int(max_mtm)}|DD:{dd :.2f}%")
             if user.must_exit_all:
                 if user.broker.pending_orders():
-                    print('Triggering panic - closing all bracket orders')
+                    print('Triggering panic - closing all BO orders')
                     user.exit_all_bracket_orders()
                     user.broker.cancel_all_orders_by_conditions()
                     #requests.get(f"http://127.0.0.1:8181/disable/{client_id}")
-                else:
+                else:                    
                     print('No pending orders to exit')
-                user.exit_all_positions()
-        return pos
+                user.exit_all_positions()                
+            return pos
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(users)) as executor:
         future_to_result = {executor.submit(check_and_close, user) for user in USERS}
         for future in concurrent.futures.as_completed(future_to_result):
@@ -311,7 +390,7 @@ def cancel_all_orders():
                 print(e)
     return jsonify(responses)
 
-@app.route('/mtm')
+@app.route('/mtm')    
 def mtm():
     lst =  []
     for user in USERS:
@@ -417,7 +496,7 @@ def modify(varargs):
     """
     responses = []
     filter_args = transform(varargs)
-    exchange = filter_args.get('exchange', 'NSE')
+    exchange = filter_args.get('exchange', 'NFO')
     # Check for modifications
     price = filter_args.pop('price', 0)
     quantity = filter_args.pop('quantity', 0)
@@ -426,18 +505,21 @@ def modify(varargs):
     modifications = {}
     if price:
         modifications['price' ] = price
+        filter_args['status'] = 'open'
+    else:
+        filter_args['status'] = 'trigger pending'        
     if quantity:
-        modifications['quantity'] = quantity
-    if trigger_price:
-        modifications['trigger_price'] = trigger_price
-
+        modifications['quantity'] = quantity    
+    modifications['trigger_price'] = trigger_price
+    # added by karthick 5th jun 2022    
+            
     for user in USERS:
         if user not in DISABLED_USERS:
-            response = user.broker.modify_all_orders_by_conditions(modifications,
+            response = user.broker.modify_all_orders_by_conditions(modifications, 
                     n=n,**filter_args)
             responses.append(response)
     return str(responses)
-
+    
 @app.route('/cancel/<path:varargs>', methods=['GET'])
 def cancel(varargs):
     """
@@ -446,13 +528,14 @@ def cancel(varargs):
     responses = []
     filter_args = transform(varargs)
     n = filter_args.pop('n', 0)
-    exchange = filter_args.get('exchange', 'NSE')
+    exchange = filter_args.get('exchange', 'NFO')
     # Check for modifications
     for user in USERS:
         if user not in DISABLED_USERS:
             response = user.broker.cancel_all_orders_by_conditions(n=n,**filter_args)
             responses.append(response)
     return str(responses)
+
 bo_string = "exc=NSE/sym=TATAPOWER-EQ/qty=4/val=DAY/sq_val=1/sl_val=1/pr=82.8/tsl=1/ot=LIMIT/prd=BO/side=BUY/user_order_id=10003"
 
 if __name__ == "__main__":

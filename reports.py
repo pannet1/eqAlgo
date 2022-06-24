@@ -1,4 +1,4 @@
-import streamlit as st
+#import streamlit as st
 import requests
 import pandas as pd
 import json
@@ -18,15 +18,13 @@ pending = pd.read_csv('reports/pending.csv')
 pending['value'] = [(trigger if trigger > 0 else price)*quantity for price,trigger,quantity in zip(pending.price, pending.trigger_price, pending.quantity)]
 
 pos_grouped = positions.groupby(['symbol']).agg({
-    'net_quantity': sum,
+    'quantity': sum,
     'average_buy_price': 'mean',
     'average_sell_price': 'mean',
     'net_amount': sum,
     'ltp': 'mean'
     }).reset_index()
 pos_grouped['bep'] = pos_grouped.eval('net_amount/net_quantity').round(2).abs()
-
-
 pending_grouped = pending.groupby(['trading_symbol', 'order_side',
     'order_type']).agg({
     'quantity': sum,
@@ -43,6 +41,8 @@ columns = ['symbol', 'net_quantity', 'bep', 'ltp', ('avg_price', 'LIMIT'),
         ('avg_price', 'SL'), 'product']
 
 grp[columns].to_csv('reports/reports.csv')
+
+'''
 st.write(
         grp[columns].style.\
         highlight_null(null_color='red').\
@@ -50,3 +50,4 @@ st.write(
         )
 
 st.text('Values highlighted in red are errors')
+'''

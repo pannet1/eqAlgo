@@ -133,13 +133,13 @@ class User(object):
         return status
 
     
-    def stop_and_reverse(self, symbol:str, opposite:str, product='MIS'):
+    def stop_and_reverse(self, symbol:str, opposite:str, product:str):
         """
         exit positions by symbol and reverse
         symbol
             symbol to exit
         opposite
-            percentage of orders to exit
+           reverse symbol to exit
         """
         positions = self.broker.positions()
         positions = self.broker.filter(positions, symbol=symbol, product=product)
@@ -154,7 +154,6 @@ class User(object):
             return
         side = 'BUY' if quantity <0 else 'SELL'
         exchange=positions.get('exchange')
-        order_quantity = abs(int(quantity * percent))
         if exchange == 'NFO':
             order_quantity = int(order_quantity/50)*50
         order_args = dict(
@@ -167,6 +166,10 @@ class User(object):
                 validity='DAY'
                 )
         status = self.broker.order_place(**order_args)
+        order_args['side']='BUY'
+        order_args['symbol']=opposite
+        status = self.broker.order_place(**order_args)
+        statuses.append(status)
         return status
 
     def exit_all_positions(self):
@@ -196,10 +199,6 @@ class User(object):
                         product=product,
                         validity='DAY'
                         )
-                status = self.broker.order_place(**order_args)
-                statuses.append(status)
-                order_args['side']='BUY'
-                order_args['symbol']=opposite
                 status = self.broker.order_place(**order_args)
                 statuses.append(status)
         return statuses

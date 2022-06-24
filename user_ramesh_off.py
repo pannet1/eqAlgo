@@ -1,4 +1,4 @@
-from fastbt.brokers.master_trust import MasterTrust
+from fastbt.brokers.master_trust import MasterTrust 
 from typing import Tuple, List, Dict
 import pandas as pd
 
@@ -10,7 +10,7 @@ exchange_list = {
 
 class User(object):
     """
-    A simple user class
+    A simple user class 
     """
     def __init__(self, client_id:str, password:str, pin:str, secret:str, capital:float=1.0, max_loss:float=1e10, trail_after:float=1e3, trail_percent:float=1e3, target:float=1e10, exc_code:int=1):
         """
@@ -33,7 +33,7 @@ class User(object):
     @property
     def capital(self)->float:
         return self._capital
-
+    
     @property
     def broker(self)->MasterTrust:
         return self._broker
@@ -95,13 +95,15 @@ class User(object):
                 except Exception as e:
                     print(e)
 
-    def exit_position_by_symbol(self, symbol:str, percent:float=1.0, product='NRML'):
+    def exit_position_by_symbol(self, symbol:str, percent:float=1.0, product='MIS'):
         """
         exit positions by symbol
         symbol
             symbol to exit
         percentage
             percentage of orders to exit
+        product
+            MIS or NRML
         """
         positions = self.broker.positions()
         positions = self.broker.filter(positions, symbol=symbol, product=product)
@@ -132,37 +134,94 @@ class User(object):
         status = self.broker.order_place(**order_args)
         return status
 
-    def exit_all_positions(self):
+    
+    def stop_for_position_by_symbol(self, symbol:str, trigger_price:float, percent:float=1.0, product='NRML'):
         """
-        exit all positions
+        stop for positions by symbol
+        symbol
+            symbol to exit
+        percentage
+            percentage of orders to exit
+        product
+            MIS or NRML
         """
         positions = self.broker.positions()
-        statuses = []
+        positions = self.broker.filter(positions, symbol=symbol, product=product)
         if len(positions) == 0:
-            print(f"No positions exist")
+            print(f"No positions for the given {symbol}")
             return
-        for position in positions:
-            symbol = position.get('symbol')
-            quantity = position.get('quantity', 0)
-            exchange=position.get('exchange')
-            product = position.get('product')
-            if quantity == 0:
-                print(f"Nothing to exit for {symbol} since positions are zero")
-            else:
-                side = 'BUY' if quantity <0 else 'SELL'
-                order_args = dict(
-                        symbol=symbol,
-                        quantity=quantity,
-                        side = side,
-                        order_type='MARKET',
-                        exchange=exchange,
-                        product=product,
-                        validity='DAY'
-                        )
-                status = self.broker.order_place(**order_args)
-                statuses.append(status)
-        return statuses
+        else:
+            positions = positions[0] # since there would only be one position matching this type
+        quantity = positions.get('quantity', 0)
+    
+        percent = min(abs(percent),1.0)
+        if quantity == 0:
+            print(f"Nothing to exit for {symbol} since positions are zero")
+            return
+        side = 'BUY' if quantity <0 else 'SELL'
+        delta = 1 if side=='BUY' else -1
+        price = int(float(trigger_price) + (delta * 1/100 * float(trigger_price)))        
+        order_quantity = abs(int(quantity * percent))
+        
+        exchange=positions.get('exchange')
+        if exchange == 'NFO':
+            order_quantity = int(order_quantity/50)*50
+        order_args = dict(
+                symbol=symbol,
+                quantity=order_quantity,
+                price=price,
+                side = side,
+                trigger_price= trigger_price,
+                order_type='SL',
+                exchange=exchange,
+                product=product,
+                validity='DAY'
+                )
+        status = self.broker.order_place(**order_args)
+        return status
 
+    def target_for_position_by_symbol(self, symbol:str, price:float, percent:float=1.0, product='NRML'):
+        """
+        stop for positions by symbol
+        symbol
+            symbol to exit
+        percentage
+            percentage of orders to exit
+        product
+            MIS or NRML
+        """
+        positions = self.broker.positions()
+        positions = self.broker.filter(positions, symbol=symbol, product=product)
+        if len(positions) == 0:
+            print(f"No positions for the given {symbol}")
+            return
+        else:
+            positions = positions[0] # since there would only be one position matching this type
+        quantity = positions.get('quantity', 0)
+    
+        percent = min(abs(percent),1.0)
+        if quantity == 0:
+            print(f"Nothing to exit for {symbol} since positions are zero")
+            return
+        side = 'BUY' if quantity <0 else 'SELL'
+        price = float(price)
+        order_quantity = abs(int(quantity * percent))
+        
+        exchange=positions.get('exchange')
+        if exchange == 'NFO':
+            order_quantity = int(order_quantity/50)*50
+        order_args = dict(
+                symbol=symbol,
+                quantity=order_quantity,
+                price=price,
+                side = side,                
+                order_type='LIMIT',
+                exchange=exchange,
+                product=product,
+                validity='DAY'
+                )
+        status = self.broker.order_place(**order_args)
+        return status
 
     @property
     def is_trailing(self)->bool:

@@ -79,8 +79,10 @@ def hello_world():
     <h4>cancel stop orders </h4> 
     http://127.0.0.1:8181/cancel/sym=NIFTY2260916500PE/status=trigger pending/side=SELL <br>
     http://127.0.0.1:8181/cancel_all <br>
-    <h4>stop and reverse</h4>
-    http://127.0.0.1:8181/copy/NIFTY2262315500CE/NIFTY2262315500PE <br>
+    <h4>stop and reverse MIS position from one Symbol to Opposite</h4>
+    http://127.0.0.1:8181/mcp/NIFTY2262315500CE/NIFTY2262315500PE <br>
+    <h4>stop and reverse NRML position from one Symbol to Opposite</h4>
+    http://127.0.0.1:8181/ncp/NIFTY2262315500CE/NIFTY2262315500PE <br>
     <h4>move stop to BEP</h4>
     http://127.0.0.1:8181/ns/NIFTY2262315500CE/bep <br>
     '''
@@ -330,16 +332,35 @@ def mis_target(symbol, price):
                 print(e)
         return jsonify(responses)    
 
-@app.route('/copy/<symbol>/<opposite>', methods=['GET'])
-def sr(symbol, opposite):
+@app.route('/mcp/<symbol>/<opposite>', methods=['GET'])
+def mis_copy(symbol, opposite):
     """
-    Exit NRML order by symbol
+    Move MIS position by Symbol to new Symbol
     """
     responses = []
     symbol = str(symbol).upper()
     opposite = str(opposite).upper()
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.stop_and_reverse,symbol,opposite,"NRML") for user in USERS}
+        futures = {executor.submit(user.stop_and_reverse,symbol,opposite,product='MIS') for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/ncp/<symbol>/<opposite>', methods=['GET'])
+def nrml_copy(symbol, opposite):
+    """
+    Move NRML position by Symbol to new Symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    opposite = str(opposite).upper()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.stop_and_reverse,symbol,opposite,product='NRML') for user in USERS}
         for future in concurrent.futures.as_completed(futures):
             try:
                 data = future.result()
