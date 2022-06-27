@@ -338,8 +338,9 @@ def stop_and_buy(symbol, opposite):
     responses = []
     symbol = str(symbol).upper()
     opposite = str(opposite).upper()
+    percent = float(request.args.get('p', 1.0))
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.stop_and_reverse,symbol,opposite) for user in USERS}
+        futures = {executor.submit(user.stop_and_reverse,symbol,opposite, percent) for user in USERS}
         for future in concurrent.futures.as_completed(futures):
             try:
                 data = future.result()

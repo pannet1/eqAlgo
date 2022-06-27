@@ -178,9 +178,14 @@ class User(object):
                 )
         close_stat = self.broker.order_place(**order_args)
         statuses.append(close_stat)
+        order_quantity = abs(int(quantity * percent))
+        exchange=positions.get('exchange')
+        if exchange == 'NFO':
+            order_quantity = int(order_quantity/50)*50
         order_args['side']='BUY'
         order_args['symbol']=opposite
         order_args['product']='MIS'
+        order_args['quantity']=order_quantity
         new_stat = self.broker.order_place(**order_args)
         statuses.append(new_stat)
         return statuses
