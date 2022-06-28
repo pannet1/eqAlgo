@@ -133,7 +133,7 @@ class User(object):
         return status
 
     
-    def stop_and_reverse(self, symbol:str, opposite:str):
+    def stop_and_reverse(self, symbol:str, opposite:str, percent:float=1.0):
         """
         exit positions by symbol and reverse
         symbol
@@ -221,7 +221,7 @@ class User(object):
                 statuses.append(status)
         return statuses
     
-    def stop_for_position_by_symbol(self, symbol:str, trigger_price:float, price:float, percent:float=1.0, product='NRML'):
+    def stop_for_position_by_symbol(self, symbol:str, trigger_price:float, percent:float=1.0, product='MIS'):
         """
         stop for positions by symbol
         symbol
