@@ -8,9 +8,10 @@ exchange_list = {
         3: ['NSE', 'NFO']
         }
 
+
 class User(object):
     """
-    A simple user class 
+    A simple user class
     """
     def __init__(self, client_id:str, password:str, pin:str, secret:str, capital:float=1.0, max_loss:float=1e10, trail_after:float=1e3, trail_percent:float=1e3, target:float=1e10, exc_code:int=1):
         """
@@ -351,7 +352,7 @@ class User(object):
             return False
 
 
-def load_all_users(filename:str='users.xls') -> List[User]:
+def load_all_users(filename:str='../confid/users_all.xls') -> List[User]:
     """
     Load all users in the file with broker enabled
     filename

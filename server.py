@@ -1,4 +1,4 @@
-from fastbt.brokers.master_trust import MasterTrust, fetch_all_contracts
+from fastbt.brokers.master_trust import fetch_all_contracts
 from user import load_all_users, load_shortcuts
 from copy import deepcopy
 import pandas as pd
@@ -13,13 +13,31 @@ app = Flask(__name__)
 """
 Routes
 ------
-1. /order/args - place a MIS order
-2. /bracket/args - place a bracket order
-3. /bs/symbol/stop - adjust stop loss for bracket order
-4. /bt/symbol/target - adjust target for bracket order
-5. /be/symbol - exit bracket order
-6. /me/symbol - exit MIS order by symbol
-7. /ne/symbol - exit NRML order by symbol
+order(varargs):
+bracket(varargs):
+bracket_stop(symbol, stop):
+bracket_target(symbol, target):
+bracket_exit(symbol):
+nrml_exit(symbol):
+mis_exit(symbol):
+nrml_stop(symbol, trigger_price):
+mis_stop(symbol, trigger_price):
+normal_target(symbol, price):
+mis_target(symbol, price):
+stop_and_buy(symbol, opposite):
+pending():
+positions():
+exit_all():
+cancel_all_orders():
+mtm():
+delay():
+all_users():
+disable_user(client_id):
+enable_user(client_id):
+report():
+modify(varargs):
+cancel(varargs):
+
 To exit the first order only, add ?mode=first like
 /be/symbol/stop?first=True
 """
@@ -212,25 +230,6 @@ def bracket_exit(symbol):
                 print(e)
     return jsonify(responses)
 
-@app.route('/me/<symbol>', methods=['GET'])
-def mis_exit(symbol):
-    """
-    Exit MIS order by symbol
-    """
-    responses = []
-    symbol = str(symbol).upper()
-    percent = float(request.args.get('p', 1.0))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
-        futures = {executor.submit(user.exit_position_by_symbol,symbol,percent,"MIS") for user in USERS}
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                data = future.result()
-                if data:
-                    responses.append(data)
-            except Exception as e:
-                print(e)
-        return jsonify(responses)
-
 @app.route('/ne/<symbol>', methods=['GET'])
 def nrml_exit(symbol):
     """
@@ -241,6 +240,25 @@ def nrml_exit(symbol):
     percent = float(request.args.get('p', 1.0))
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
         futures = {executor.submit(user.exit_position_by_symbol,symbol,percent,"NRML") for user in USERS}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data = future.result()
+                if data:
+                    responses.append(data)
+            except Exception as e:
+                print(e)
+        return jsonify(responses)
+
+@app.route('/me/<symbol>', methods=['GET'])
+def mis_exit(symbol):
+    """
+    Exit MIS order by symbol
+    """
+    responses = []
+    symbol = str(symbol).upper()
+    percent = float(request.args.get('p', 1.0))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(USERS)) as executor:
+        futures = {executor.submit(user.exit_position_by_symbol,symbol,percent,"MIS") for user in USERS}
         for future in concurrent.futures.as_completed(futures):
             try:
                 data = future.result()
@@ -291,7 +309,7 @@ def mis_stop(symbol, trigger_price):
         return jsonify(responses)
 
 @app.route('/nt/<symbol>/<price>', methods=['GET'])
-def normal_target(symbol, price):
+def nrml_target(symbol, price):
     """
     target NRML order by symbol
     """
